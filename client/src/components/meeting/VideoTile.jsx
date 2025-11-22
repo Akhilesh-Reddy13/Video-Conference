@@ -32,10 +32,24 @@ const VideoTile = ({
   useEffect(() => {
     if (!isLocal && stream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = stream;
+      remoteVideoRef.current.muted = false; // Don't mute remote videos
       // Force video to play
       remoteVideoRef.current.play().catch(err => {
         console.log('Remote video play error:', err);
       });
+      
+      // Handle track changes
+      stream.onaddtrack = (event) => {
+        console.log('Track added to remote stream:', event.track.kind);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = stream;
+          remoteVideoRef.current.play().catch(err => console.log('Play error:', err));
+        }
+      };
+      
+      stream.onremovetrack = (event) => {
+        console.log('Track removed from remote stream:', event.track.kind);
+      };
     }
   }, [stream, isLocal]);
 

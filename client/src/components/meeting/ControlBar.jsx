@@ -43,9 +43,11 @@ const ControlBar = ({ onLeave }) => {
     socket.emit('toggle-audio', { isAudioMuted: !isAudioMuted });
   };
 
-  const handleToggleVideo = () => {
+  const handleToggleVideo = async () => {
+    const newVideoOffState = !isVideoOff;
     toggleVideo();
-    socket.emit('toggle-video', { isVideoOff: !isVideoOff });
+    // Emit the new state to other participants
+    socket.emit('toggle-video', { isVideoOff: newVideoOffState });
   };
 
   const handleToggleScreenShare = async () => {

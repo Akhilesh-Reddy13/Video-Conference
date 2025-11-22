@@ -200,9 +200,10 @@ class WebRTCManager {
 
     const videoTracks = this.localStream.getVideoTracks();
     
-    if (videoTracks.length === 0) {
-      // No video track, need to get one
-      if (enabled) {
+    if (enabled) {
+      // Turning video ON
+      if (videoTracks.length === 0 || videoTracks[0].readyState === 'ended') {
+        // Need to get a new video track
         try {
           const newStream = await navigator.mediaDevices.getUserMedia({
             video: { width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -210,56 +211,64 @@ class WebRTCManager {
           });
           
           const newVideoTrack = newStream.getVideoTracks()[0];
+          
+          // Remove old video track if exists
+          if (videoTracks.length > 0) {
+            this.localStream.removeTrack(videoTracks[0]);
+            videoTracks[0].stop();
+          }
+          
+          // Add new video track to local stream
           this.localStream.addTrack(newVideoTrack);
           
-          // Replace track in all peer connections
-          await this.replaceVideoTrack(newVideoTrack);
+          // Add or replace track in all peer connections
+          for (const [socketId, pc] of this.peerConnections.entries()) {
+            const senders = pc.getSenders();
+            const videoSender = senders.find((s) => s.track?.kind === 'video');
+            
+            if (videoSender) {
+              // Replace existing sender
+              await videoSender.replaceTrack(newVideoTrack);
+            } else {
+              // Add new sender if none exists
+              pc.addTrack(newVideoTrack, this.localStream);
+            }
+          }
           
+          console.log('✅ Video track started and added to peer connections');
           return true;
         } catch (error) {
           console.error('Error starting video:', error);
           return false;
         }
-      }
-      return false;
-    }
-
-    const videoTrack = videoTracks[0];
-    
-    if (enabled && videoTrack.readyState === 'ended') {
-      // Track is ended, need to get a new one
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        
-        const newVideoTrack = newStream.getVideoTracks()[0];
-        
-        // Remove old video track
-        this.localStream.removeTrack(videoTrack);
-        videoTrack.stop();
-        
-        // Add new video track
-        this.localStream.addTrack(newVideoTrack);
-        
-        // Replace track in all peer connections
-        await this.replaceVideoTrack(newVideoTrack);
-        
+      } else {
+        // Just enable the existing track
+        videoTracks[0].enabled = true;
+        console.log('✅ Video track enabled');
         return true;
-      } catch (error) {
-        console.error('Error restarting video:', error);
-        return false;
       }
     } else {
-      // Just enable/disable the existing track
-      videoTrack.enabled = enabled;
-      
-      // Renegotiate with all peers to ensure they see the change
-      if (enabled) {
-        await this.replaceVideoTrack(videoTrack);
+      // Turning video OFF
+      if (videoTracks.length > 0) {
+        const videoTrack = videoTracks[0];
+        
+        // Stop the track completely
+        videoTrack.stop();
+        this.localStream.removeTrack(videoTrack);
+        
+        // Remove track from all peer connections or replace with null
+        for (const [socketId, pc] of this.peerConnections.entries()) {
+          const senders = pc.getSenders();
+          const videoSender = senders.find((s) => s.track?.kind === 'video');
+          
+          if (videoSender) {
+            await videoSender.replaceTrack(null);
+          }
+        }
+        
+        console.log('✅ Video track stopped and removed from peer connections');
+        return true;
       }
-      
       return true;
     }
   }

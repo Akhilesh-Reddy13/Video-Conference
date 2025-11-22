@@ -48,8 +48,10 @@ const Meeting = () => {
         // Ensure local video displays immediately
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true; // Prevent echo
           // Force video to play
-          localVideoRef.current.play().catch(err => console.log('Play error:', err));
+          await localVideoRef.current.play().catch(err => console.log('Play error:', err));
+          console.log('✅ Local video stream attached and playing');
         }
 
         // Join room
@@ -74,6 +76,7 @@ const Meeting = () => {
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.muted = true; // Prevent echo
       localVideoRef.current.play().catch(err => console.log('Play error:', err));
     }
   }, [localStream]);
@@ -89,10 +92,15 @@ const Meeting = () => {
       if (success && localVideoRef.current) {
         // Refresh video display
         localVideoRef.current.srcObject = webRTCManager.localStream;
+        localVideoRef.current.muted = true;
+        await localVideoRef.current.play().catch(err => console.log('Play error:', err));
+        console.log(`✅ Video ${isVideoOff ? 'disabled' : 'enabled'}`);
       }
+      // Update the store with the new stream
+      setLocalStream(webRTCManager.localStream);
     };
     updateVideo();
-  }, [isVideoOff]);
+  }, [isVideoOff, setLocalStream]);
 
   if (isConnecting) {
     return (
