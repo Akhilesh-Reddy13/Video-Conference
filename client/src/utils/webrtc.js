@@ -67,18 +67,18 @@ class WebRTCManager {
 
   // Create peer connection
   createPeerConnection(socketId, onTrack, onIceCandidate) {
-    const pc = new RTCPeerConnection(ICE_SERVERS);
-
-    // Add local stream tracks to peer connection
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream);
-      });
+    if (this.peerConnections.has(socketId)) {
+      console.log(`⚠️  Peer connection already exists for: ${socketId}`);
+      return this.peerConnections.get(socketId);
     }
 
-    // Handle incoming tracks
+    console.log(`🔗 Creating peer connection for: ${socketId}`);
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+
+    // Handle incoming tracks - Set up BEFORE adding local tracks
     pc.ontrack = (event) => {
-      console.log('Received remote track:', event);
+      console.log(`📹 Received ${event.track.kind} track from ${socketId}`);
+      console.log(`📹 Stream ID: ${event.streams[0]?.id}, tracks:`, event.streams[0]?.getTracks().map(t => `${t.kind}(${t.enabled})`));
       if (onTrack) {
         onTrack(event.streams[0]);
       }
@@ -87,24 +87,38 @@ class WebRTCManager {
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && onIceCandidate) {
+        console.log(`🧊 Sending ICE candidate to: ${socketId}`);
         onIceCandidate(event.candidate);
       }
     };
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log(`Peer connection state (${socketId}):`, pc.connectionState);
+      console.log(`🔌 Peer connection state (${socketId}): ${pc.connectionState}`);
       
       if (pc.connectionState === 'failed') {
-        console.error(`Peer connection failed for ${socketId}`);
+        console.error(`❌ Peer connection failed for ${socketId}`);
         this.closePeerConnection(socketId);
       }
     };
 
     // Handle ICE connection state changes
     pc.oniceconnectionstatechange = () => {
-      console.log(`ICE connection state (${socketId}):`, pc.iceConnectionState);
+      console.log(`🧊 ICE connection state (${socketId}): ${pc.iceConnectionState}`);
     };
+
+    // Add local stream tracks to peer connection AFTER setting up handlers
+    if (this.localStream) {
+      const tracks = this.localStream.getTracks();
+      console.log(`➕ Adding ${tracks.length} tracks to peer ${socketId}:`, tracks.map(t => `${t.kind}(enabled: ${t.enabled}, readyState: ${t.readyState})`));
+      
+      tracks.forEach((track) => {
+        const sender = pc.addTrack(track, this.localStream);
+        console.log(`✅ Added ${track.kind} track to peer ${socketId}`);
+      });
+    } else {
+      console.warn(`⚠️  No local stream available when creating peer connection for ${socketId}`);
+    }
 
     this.peerConnections.set(socketId, pc);
     return pc;
@@ -115,8 +129,18 @@ class WebRTCManager {
     const pc = this.createPeerConnection(socketId, onTrack, onIceCandidate);
 
     try {
-      const offer = await pc.createOffer();
+      // Verify tracks are added
+      const senders = pc.getSenders();
+      console.log(`📊 Senders for ${socketId} before offer:`, senders.map(s => s.track ? `${s.track.kind}(${s.track.enabled})` : 'null'));
+
+      // Create offer with explicit bidirectional media
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      
       await pc.setLocalDescription(offer);
+      console.log(`✅ Offer created and set for ${socketId}`);
       return offer;
     } catch (error) {
       console.error('Error creating offer:', error);
@@ -130,8 +154,15 @@ class WebRTCManager {
 
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log(`✅ Remote description set for ${socketId}`);
+
+      // Verify local tracks are added before creating answer
+      const senders = pc.getSenders();
+      console.log(`📊 Senders for ${socketId} before answer:`, senders.map(s => s.track ? `${s.track.kind}(${s.track.enabled})` : 'null'));
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log(`✅ Answer created and set for ${socketId}`);
       return answer;
     } catch (error) {
       console.error('Error creating answer:', error);

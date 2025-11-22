@@ -31,27 +31,54 @@ const VideoTile = ({
   // Set stream for remote videos
   useEffect(() => {
     if (!isLocal && stream && remoteVideoRef.current) {
+      console.log(`🎬 VideoTile: Setting stream for ${name}`);
+      console.log(`📹 Stream tracks:`, stream.getTracks().map(t => `${t.kind}(enabled: ${t.enabled}, readyState: ${t.readyState})`));
+
       remoteVideoRef.current.srcObject = stream;
       remoteVideoRef.current.muted = false; // Don't mute remote videos
-      // Force video to play
-      remoteVideoRef.current.play().catch(err => {
-        console.log('Remote video play error:', err);
-      });
+      remoteVideoRef.current.volume = 1.0;
+
+      // Force video to play with retry logic
+      const playPromise = remoteVideoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log(`✅ Remote video playing for ${name}`);
+          })
+          .catch((error) => {
+            console.error(`❌ Error playing remote video for ${name}:`, error);
+            // Retry after a short delay
+            setTimeout(() => {
+              if (remoteVideoRef.current) {
+                remoteVideoRef.current.play().catch(err => console.log('Retry play error:', err));
+              }
+            }, 1000);
+          });
+      }
       
       // Handle track changes
-      stream.onaddtrack = (event) => {
-        console.log('Track added to remote stream:', event.track.kind);
+      const handleTrackAdded = (event) => {
+        console.log(`➕ Track added to remote stream for ${name}:`, event.track.kind);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = stream;
-          remoteVideoRef.current.play().catch(err => console.log('Play error:', err));
+          remoteVideoRef.current.play().catch(err => console.log('Play after track add error:', err));
         }
       };
       
-      stream.onremovetrack = (event) => {
-        console.log('Track removed from remote stream:', event.track.kind);
+      const handleTrackRemoved = (event) => {
+        console.log(`➖ Track removed from remote stream for ${name}:`, event.track.kind);
+      };
+
+      stream.addEventListener('addtrack', handleTrackAdded);
+      stream.addEventListener('removetrack', handleTrackRemoved);
+
+      return () => {
+        stream.removeEventListener('addtrack', handleTrackAdded);
+        stream.removeEventListener('removetrack', handleTrackRemoved);
       };
     }
-  }, [stream, isLocal]);
+  }, [stream, isLocal, name]);
 
   const handlePin = () => {
     if (!isLocal && socketId) {

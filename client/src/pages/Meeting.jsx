@@ -37,29 +37,37 @@ const Meeting = () => {
       setConnecting(true);
 
       try {
-        // Get user media
+        console.log('🚀 Initializing meeting...');
+        
+        // Get user media FIRST
         const stream = await webRTCManager.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: { echoCancellation: true, noiseSuppression: true },
         });
 
+        console.log('✅ Got user media, tracks:', stream.getTracks().map(t => `${t.kind}(enabled: ${t.enabled}, readyState: ${t.readyState})`));
+        
         setLocalStream(stream);
 
-        // Ensure local video displays immediately
+        // Set up local video immediately
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
           localVideoRef.current.muted = true; // Prevent echo
-          // Force video to play
           await localVideoRef.current.play().catch(err => console.log('Play error:', err));
           console.log('✅ Local video stream attached and playing');
         }
 
-        // Join room
+        // Small delay to ensure stream is fully ready before WebRTC negotiation
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Join room AFTER stream is ready
+        console.log('📞 Joining room with peerId:', peerId);
         await joinRoom(peerId);
 
         setConnecting(false);
+        console.log('✅ Meeting initialization complete');
       } catch (error) {
-        console.error('Error initializing meeting:', error);
+        console.error('❌ Error initializing meeting:', error);
         setConnecting(false);
       }
     };
@@ -68,6 +76,7 @@ const Meeting = () => {
 
     // Cleanup on unmount
     return () => {
+      console.log('🧹 Cleaning up meeting component');
       webRTCManager.cleanup();
     };
   }, [roomCode, peerId, joinRoom, setLocalStream, setConnecting]);
