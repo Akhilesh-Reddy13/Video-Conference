@@ -39,15 +39,17 @@ const Meeting = () => {
       try {
         // Get user media
         const stream = await webRTCManager.getUserMedia({
-          video: true,
-          audio: true,
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: { echoCancellation: true, noiseSuppression: true },
         });
 
         setLocalStream(stream);
 
-        // Display local video
+        // Ensure local video displays immediately
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          // Force video to play
+          localVideoRef.current.play().catch(err => console.log('Play error:', err));
         }
 
         // Join room
@@ -72,6 +74,7 @@ const Meeting = () => {
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(err => console.log('Play error:', err));
     }
   }, [localStream]);
 

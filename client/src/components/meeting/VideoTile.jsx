@@ -32,6 +32,10 @@ const VideoTile = ({
   useEffect(() => {
     if (!isLocal && stream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = stream;
+      // Force video to play
+      remoteVideoRef.current.play().catch(err => {
+        console.log('Remote video play error:', err);
+      });
     }
   }, [stream, isLocal]);
 

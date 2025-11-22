@@ -1,9 +1,11 @@
 import { useMeetingStore } from '../../store/meetingStore';
 import { useAuthStore } from '../../store/authStore';
+import { getSocket } from '../../utils/socket';
 import VideoTile from './VideoTile';
 
 const VideoGrid = ({ localVideoRef }) => {
   const { user } = useAuthStore();
+  const socket = getSocket();
   const {
     participants,
     remoteStreams,
@@ -14,7 +16,9 @@ const VideoGrid = ({ localVideoRef }) => {
     pinnedParticipant,
   } = useMeetingStore();
 
-  const totalParticipants = participants.length + 1; // +1 for local user
+  // Filter out self from participants list to prevent duplicate
+  const remoteParticipants = participants.filter(p => p.socketId !== socket?.id);
+  const totalParticipants = remoteParticipants.length + 1; // +1 for local user
 
   // Calculate grid layout
   const getGridClass = () => {
@@ -31,8 +35,8 @@ const VideoGrid = ({ localVideoRef }) => {
   };
 
   const displayParticipants = selectedView === 'speaker' && pinnedParticipant
-    ? participants.filter(p => p.socketId === pinnedParticipant)
-    : participants;
+    ? remoteParticipants.filter(p => p.socketId === pinnedParticipant)
+    : remoteParticipants;
 
   return (
     <div className="h-full w-full p-4">
