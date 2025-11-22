@@ -19,7 +19,7 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://video-conference-client-qnxn-1zxnvqvg7.vercel.app'
+  /^https:\/\/video-conference-client.*\.vercel\.app$/
 ];
 
 // Initialize Socket.io
